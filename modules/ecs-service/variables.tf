@@ -195,6 +195,12 @@ variable "image_tag" {
   description = "The image tag used to start the container"
 }
 
+variable "image_digest" {
+  type        = string
+  default     = null
+  description = "Optional image digest (sha256:...). When set, the container runs repo@digest instead of repo:tag, so pushing a new image under the same tag only deploys when the digest here changes."
+}
+
 variable "interactive" {
   type        = bool
   default     = false

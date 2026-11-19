@@ -157,8 +157,9 @@ module "vic_backend" {
   min_capacity = 1
   max_capacity = 3
 
-  image_repo = local.vic.backend.image.repo
-  image_tag  = local.vic.backend.image.tag
+  image_repo   = local.vic.backend.image.repo
+  image_tag    = local.vic.backend.image.tag
+  image_digest = local.vic.backend.image.digest
 
   use_load_balancer       = true
   lb_dns_name             = aws_lb.main.dns_name

@@ -39,7 +39,7 @@ locals {
     extraHosts             = length(var.extraHosts) == 0 ? null : var.extraHosts
     healthCheck            = jsonencode(var.healthCheck) == "{}" ? null : var.healthCheck
     hostname               = var.hostname == "" ? null : var.hostname
-    image                  = "${var.image_repo}:${var.image_tag}"
+    image                  = var.image_digest == null ? "${var.image_repo}:${var.image_tag}" : "${var.image_repo}@${var.image_digest}"
     interactive            = var.interactive
     links                  = length(var.links) == 0 ? null : var.links
     linuxParameters        = var.linuxParameters
