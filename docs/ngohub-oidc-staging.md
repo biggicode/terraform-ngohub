@@ -1,0 +1,112 @@
+# NGO Hub own login + OIDC, and VIC "Continuă cu NGO Hub": staging rollout
+
+Staging only. Production is a separate runbook (T4) and nothing here changes it: every resource and
+setting below is behind `ngohub_own_auth_enabled` / `vic_ngohub_login_enabled`, which are ignored when
+`environment = "production"`. Before each apply, check that the plan touches only staging resources.
+
+Code: onghub `feat/ngohub-own-auth` (O0–O15), vic `feat/ngohub-oidc` (VIC 01–07), this repo
+`feat/ngohub-oidc-staging` (T1, T2). Plan: `plan-cu-decizii.md` (Andrew, 25 November 2026).
+
+## 0. Before
+
+- [ ] T0 inventory done (Cognito pre-auth trigger, other pool clients, RDS Postgres ≥ 13, Redis memory,
+      SES quota, proxy hops). If anything sits between the ALB and the task, set `TRUST_PROXY_HOPS`.
+- [ ] onghub: `develop` brought up to `main`, `feat/ngohub-own-auth` merged into `develop`, the image built
+      by `build-image.yml` for `develop`. Note its tag: `<ngohub_tag>`.
+- [ ] The Amplify NGO Hub app builds `develop`; it must contain the own-login SPA before step 3.
+- [ ] vic: `feat/ngohub-oidc` merged into `develop`, a release tag built (`v2.0.0-rc.N`): `<vic_tag>`.
+
+## 1. Snapshot and pre-flight
+
+1. Manual RDS snapshot of the staging database (the rollback point).
+2. Through the bastion: `psql ... -d ngohub -f onghub/backend/scripts/auth-preflight.sql`. Every check
+   must return zero rows (the email migration refuses case duplicates).
+
+## 2. Secrets
+
+```sh
+cd onghub/backend && npm run build
+npm run oidc:generate-keys -- --env staging --out ngohub-staging.auto.tfvars   # mode 600, never in git or chat
+```
+
+Keep the file where the team keeps terraform secrets (it holds the JWT and OIDC signing keys).
+
+## 3. NGO Hub with own login and as OIDC provider (T1)
+
+```sh
+terraform workspace select staging
+terraform plan \
+  -var ngohub_own_auth_enabled=true \
+  -var ngohub_staging_image_tag=<ngohub_tag> \
+  -var-file=ngohub-staging.auto.tfvars -out t1.plan
+```
+
+Expected changes, staging only: the `ngohub_auth` secret and its version, the NGO Hub task definition
+(new image, auth and OIDC settings, ECS Exec), the service, the ALB rule and DNS records for
+`id-staging.<root>`, the Amplify NGO Hub branch (`REACT_APP_OWN_AUTH`, `REACT_APP_OIDC_ISSUER`) and app
+(security headers). Then `terraform apply t1.plan`. Migrations run at boot (`migrationsRun: true`).
+
+Checks: `https://id-staging.<root>/.well-known/openid-configuration` answers with that issuer;
+`/oidc/jwks` shows one key with the generated kid; `https://api-staging.<root>/health` is 200.
+
+## 4. Move the users to the own login
+
+ECS Exec into the NGO Hub task (`aws ecs execute-command --cluster ... --task ... --interactive --command sh`):
+
+```sh
+npm run auth:migrate -- --dry-run     # counts, duplicates
+npm run auth:migrate                  # identities + held transition emails
+# smoke test (below), then release the emails
+```
+
+Smoke test: login with link and with code, an invite, restricting a user, deleting one, `/new`.
+Decision 3: staging has test data, no `MAIL_ALLOWLIST` needed (set `ngohub_mail_allowlist` otherwise).
+
+## 5. Register VIC as a client
+
+Either the super-admin panel (Edit application → "Autentificare cu NGO Hub (OIDC)") on the VIC
+application, or in the task:
+
+```sh
+npm run oidc:register-client -- --client-id vic --first-party \
+  --scopes "openid email profile organization" \
+  --redirect-uri https://vic-staging.<root>/login/ngohub/callback \
+  --redirect-uri http://localhost:5173/login/ngohub/callback
+```
+
+The secret is shown once: put it straight into the staging tfvars as `vic_ngohub_client_secret`.
+
+## 6. VIC with "Continuă cu NGO Hub" (T2)
+
+Set VIC's staging image to `<vic_tag>` (`locals.tf`, `local.vic.backend.image.tag`), then:
+
+```sh
+terraform plan \
+  -var ngohub_own_auth_enabled=true -var ngohub_staging_image_tag=<ngohub_tag> \
+  -var vic_ngohub_login_enabled=true \
+  -var-file=ngohub-staging.auto.tfvars -out t2.plan
+```
+
+Expected changes: the VIC secret version (new key `ngohub_oidc_client_secret`), the VIC task definition
+(`NGOHUB_*`), the VIC Amplify branch (`VITE_NGOHUB_ENABLED=true`). Apply.
+
+The five VIC scenarios (plan, section 7, phase 5): existing admin (by `sub` and by email); NGO Hub admin of
+an organization VIC knows (joins, the other admins get "nu am fost noi"); employee (refused, AUTH_017);
+admin of a new organization (prefilled form); VIC login of another organization (AUTH_016). Also: logout
+in VIC, then "Continuă cu NGO Hub" asks for a new code.
+
+## 7. Link VIC's older organizations
+
+```sh
+# NGO Hub task:  npm run oidc:export-orgs -- --out /tmp/ngohub-orgs.json   (copy it to the VIC task)
+# VIC task:      npm run ngohub:link-orgs:prod -- --file /tmp/ngohub-orgs.json --report /tmp/report.json
+# review the report (conflicts and candidates are never written), then the same with --apply
+```
+
+## Rollback
+
+- VIC: `vic_ngohub_login_enabled=false` and apply (the button disappears, the API answers AUTH_020).
+- NGO Hub before step 4: `ngohub_own_auth_enabled=false`, image tag back to `2.0.3`, apply.
+- NGO Hub after step 4: also restore the snapshot from step 1 and empty the held transition queue
+  (`TransitionMailService.drop()`).
+- After T3 (Cognito removed on staging) there is no way back to Cognito.

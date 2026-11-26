@@ -113,6 +113,9 @@ module "ngohub_backend" {
   image_repo = local.ngohub.backend.image.repo
   image_tag  = local.ngohub.backend.image.tag
 
+  # Staging with own auth: ECS Exec runs the one-off commands (auth:migrate, oidc:register-client)
+  enable_execute_command = local.ngohub_own_auth
+
   use_load_balancer       = true
   lb_dns_name             = aws_lb.main.dns_name
   lb_zone_id              = aws_lb.main.zone_id
