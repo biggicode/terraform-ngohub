@@ -3,7 +3,7 @@ resource "aws_cognito_user_pool" "this" {
 
   # When active, DeletionProtection prevents accidental deletion of your user pool.
   # Currently active only in production
-  deletion_protection = var.environment == "production" ? "ACTIVE" : "INACTIVE"
+  deletion_protection = coalesce(var.deletion_protection, var.environment == "production") ? "ACTIVE" : "INACTIVE"
 
   username_attributes      = var.username_attributes
   auto_verified_attributes = var.auto_verified_attributes

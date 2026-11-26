@@ -214,16 +214,16 @@ variable "vic_apple_private_key" {
   sensitive   = true
 }
 
-### NGO Hub own login and OIDC provider (staging only; ignored in production)
+### NGO Hub own login and OIDC provider (staging: docs/ngohub-oidc-staging.md, production: docs/ngohub-oidc-production.md)
 
 variable "ngohub_own_auth_enabled" {
-  description = "Staging: run NGO Hub with its own login and as OIDC provider (needs an onghub image and develop branch with the feature, and every ngohub_auth_* value)."
+  description = "Run NGO Hub with its own login and as OIDC provider (needs an onghub image and develop branch with the feature, and every ngohub_auth_* value)."
   type        = bool
   default     = false
 }
 
 variable "ngohub_staging_image_tag" {
-  description = "Staging: NGO Hub backend image tag (production stays pinned in locals.tf)."
+  description = "Staging: NGO Hub backend image tag (production: ngohub_production_image_tag)."
   type        = string
   default     = "2.0.3"
 }
@@ -296,7 +296,7 @@ variable "ngohub_mail_allowlist" {
 ### VIC: login with NGO Hub (staging only; needs ngohub_own_auth_enabled)
 
 variable "vic_ngohub_login_enabled" {
-  description = "Staging: show and serve \"Continuă cu NGO Hub\" in VIC (needs ngohub_own_auth_enabled and the VIC client registered with oidc:register-client)."
+  description = "Show and serve \"Continuă cu NGO Hub\" in VIC (needs ngohub_own_auth_enabled and the VIC client registered with oidc:register-client)."
   type        = bool
   default     = false
 }
@@ -315,7 +315,32 @@ variable "vic_ngohub_client_secret" {
 }
 
 variable "ngohub_cognito_removed" {
-  description = "Staging, IRREVERSIBLE: delete NGO Hub's Cognito user pool, its lambdas and VIC's old client on it (T3). Needs ngohub_own_auth_enabled; ignored in production."
+  description = "IRREVERSIBLE: delete NGO Hub's Cognito user pool, its lambdas and VIC's old client on it (T3). Needs ngohub_own_auth_enabled; in production also ngohub_cognito_deletion_protection_off, applied first."
+  type        = bool
+  default     = false
+}
+
+variable "ngohub_production_image_tag" {
+  description = "Production: NGO Hub backend image tag. 2.0.3 is the last Cognito-only release; change it only in the production runbook's phase 2."
+  type        = string
+  default     = "2.0.3"
+}
+
+variable "ngohub_production_ecs_exec_enabled" {
+  description = "Production: ECS Exec into the NGO Hub task (auth:migrate, oidc:register-client), only during the change windows."
+  type        = bool
+  default     = false
+}
+
+variable "ngohub_auth_token_key_previous" {
+  description = "The previous NGO Hub AUTH_TOKEN_KEY, only while rotating it (opens client secrets sealed with the old key)."
+  type        = string
+  sensitive   = true
+  default     = null
+}
+
+variable "ngohub_cognito_deletion_protection_off" {
+  description = "Production: turn off deletion protection on NGO Hub's Cognito pool, applied on its own right before ngohub_cognito_removed."
   type        = bool
   default     = false
 }

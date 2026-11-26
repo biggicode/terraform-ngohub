@@ -443,7 +443,12 @@ resource "aws_secretsmanager_secret_version" "vic_auth" {
   lifecycle {
     precondition {
       condition     = !local.vic_ngohub_login || (var.vic_ngohub_client_secret != null && var.vic_ngohub_client_secret != "")
-      error_message = "vic_ngohub_login_enabled needs vic_ngohub_client_secret (from oidc:register-client on NGO Hub staging)."
+      error_message = "vic_ngohub_login_enabled needs vic_ngohub_client_secret (from oidc:register-client on NGO Hub)."
+    }
+    # VIC 1.x (Cognito) has no NGO Hub login: production needs VIC 2.0 first (production runbook, phase 1).
+    precondition {
+      condition     = !local.vic_ngohub_login || !startswith(local.vic.backend.image.tag, "1.")
+      error_message = "vic_ngohub_login_enabled needs VIC 2.x (local.vic.backend.image.tag)."
     }
   }
 }

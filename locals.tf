@@ -1,15 +1,17 @@
 locals {
   isProduction = var.environment == "production"
 
-  # NGO Hub own login + OIDC provider (T1). Staging only, and only once switched on: the onghub image and
-  # the Amplify branch must already contain the feature. Off = exactly the current setup.
-  ngohub_own_auth = !local.isProduction && var.ngohub_own_auth_enabled
+  # NGO Hub own login + OIDC provider (T1; production: docs/ngohub-oidc-production.md, phase 2). Only once
+  # switched on: the onghub image and the Amplify branch must already contain the feature. Off = exactly
+  # the current setup, in both environments.
+  ngohub_own_auth = var.ngohub_own_auth_enabled
 
   # VIC: "Continuă cu NGO Hub" (T2). Needs the NGO Hub provider above and the VIC client registered on it.
   vic_ngohub_login = local.ngohub_own_auth && var.vic_ngohub_login_enabled
 
-  # T3: NGO Hub's Cognito pool removed, staging only and only once own auth runs there. IRREVERSIBLE on
-  # staging (the pool and its users are deleted): export list-users first (docs/ngohub-oidc-staging.md).
+  # T3: NGO Hub's Cognito pool removed, only once own auth runs. IRREVERSIBLE (the pool and its users are
+  # deleted): export list-users first. In production the pool's deletion protection must be turned off in
+  # an earlier apply (ngohub_cognito_deletion_protection_off).
   ngohub_cognito = !(local.ngohub_own_auth && var.ngohub_cognito_removed)
 
   namespace  = "ngohub-${var.environment}"
@@ -35,7 +37,7 @@ locals {
       domain = "api${local.env_suffix}.${var.root_domain}"
       image = {
         repo = data.aws_ecr_repository.ngohub_backend.repository_url
-        tag  = local.isProduction ? "2.0.3" : var.ngohub_staging_image_tag
+        tag  = local.isProduction ? var.ngohub_production_image_tag : var.ngohub_staging_image_tag
       }
     }
 

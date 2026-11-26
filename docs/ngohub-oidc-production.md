@@ -22,23 +22,27 @@ T3 included, and staging stayed stable for at least two weeks.
 - [ ] Rehearsal on that copy: `auth:migrate -- --dry-run` in the production image, counts noted.
 - [ ] The terraform change from section 1 merged, and its plan on production checked.
 
-## 1. Terraform change for production (a separate PR, not on `feat/ngohub-oidc-staging`)
+## 1. Terraform change for production (branch `feat/ngohub-oidc-production`)
 
-T1–T3 are hard-wired to staging (`!local.isProduction`). Production needs, reviewed on its own:
+T1–T3 were hard-wired to staging. This branch, reviewed on its own, makes them work in production behind
+switches that all default to off:
 
-- `local.ngohub_own_auth = var.ngohub_own_auth_enabled` in both environments, still default `false`.
-- The production NGO Hub image tag pinned in `locals.tf` (now `2.0.3`), changed only in phase 2.
-- `OIDC_ALLOW_LOCALHOST_REDIRECTS = "false"` in production (staging keeps `true` for VIC developers).
-- ECS Exec on the production NGO Hub service only for the phase 2 and 4 windows (`enable_execute_command`
-  behind its own variable), switched off again afterwards.
-- `AUTH_TOKEN_KEY_PREVIOUS` in the `ngohub_auth` secret, optional, for key rotation (section 8). Today
-  terraform does not pass it.
-- `ngohub_cognito_removed` allowed in production, plus a variable that turns off the pool's
-  `deletion_protection` (`modules/cognito/main.tf:6`: production is `ACTIVE`). Both default off.
+| Variable | Production effect |
+| --- | --- |
+| `ngohub_own_auth_enabled` | own login + OIDC (phase 2); refused while `ngohub_production_image_tag` is `2.0.3` |
+| `ngohub_production_image_tag` | NGO Hub image, default `2.0.3` (the last Cognito-only release) |
+| `ngohub_production_ecs_exec_enabled` | ECS Exec into the NGO Hub task, only during phases 2 and 3 |
+| `vic_ngohub_login_enabled` | "Continuă cu NGO Hub" in VIC (phase 3); refused while VIC runs 1.x |
+| `ngohub_auth_token_key_previous` | `AUTH_TOKEN_KEY_PREVIOUS`, only during a rotation (section 8) |
+| `ngohub_cognito_deletion_protection_off` | turns off the pool's deletion protection (phase 4, its own apply) |
+| `ngohub_cognito_removed` | destroys NGO Hub's pool (phase 4); refused without the variable above |
 
-Acceptance: with every switch off, the production plan shows only the `moved` blocks from T3
-(`module.ngohub_cognito` → `[0]`, `aws_cognito_user_pool_client.vic_ngohub_client` → `[0]`), no create,
-change or destroy.
+`OIDC_ALLOW_LOCALHOST_REDIRECTS` is `false` in production, always.
+
+`tests/ngohub_oidc.tftest.hcl` plans both environments on mocked providers (`terraform test`,
+terraform ≥ 1.11) and checks each switch and each refusal. Acceptance on the real state: with every
+switch off, the production plan shows only the `moved` blocks from T3 (`module.ngohub_cognito` → `[0]`,
+`aws_cognito_user_pool_client.vic_ngohub_client` → `[0]`), no create, change or destroy.
 
 ## 2. Phase 1 — VIC 2.0 (own login) in production
 
@@ -58,7 +62,8 @@ production (no `cognito-idp` calls in CloudTrail for a week) before phase 5.
 4. Image: the onghub release built from `main` with O1–O15: `<ngohub_tag>`.
 5. ```sh
    terraform workspace select production
-   terraform plan -var ngohub_own_auth_enabled=true -var-file=ngohub-production.auto.tfvars -out p2.plan
+   terraform plan -var ngohub_own_auth_enabled=true -var ngohub_production_image_tag=<ngohub_tag> \
+     -var ngohub_production_ecs_exec_enabled=true -var-file=ngohub-production.auto.tfvars -out p2.plan
    ```
    Expected: the `ngohub_auth` secret, the NGO Hub task definition (image, auth and OIDC settings), the
    ALB rule and DNS for `id.<root>`, the Amplify `main` branch (`REACT_APP_OWN_AUTH`,
@@ -91,7 +96,7 @@ From step 9 on, users hold 30-day transition links: **do not rotate `AUTH_TOKEN_
    ```
    No localhost redirect in production. The secret is shown once: straight into the production tfvars as
    `vic_ngohub_client_secret`.
-2. `terraform plan -var ngohub_own_auth_enabled=true -var vic_ngohub_login_enabled=true ... -out p3.plan`.
+2. `terraform plan` as in phase 2 plus `-var vic_ngohub_login_enabled=true`, `-out p3.plan`.
    Expected: the VIC secret version (`ngohub_oidc_client_secret`), the VIC task definition (`NGOHUB_*`),
    the VIC Amplify branch (`VITE_NGOHUB_ENABLED=true`). Apply.
 3. Scenarios with a test organization the team owns: existing VIC admin; NGO Hub admin of an
@@ -105,7 +110,7 @@ From step 9 on, users hold 30-day transition links: **do not rotate `AUTH_TOKEN_
    ```
    Review the report with Code4 (conflicts and candidates are never written; candidates are fixed by
    hand, question 15), then the same with `--apply`. Keep both reports.
-5. ECS Exec off again (section 1).
+5. ECS Exec off again: the same plan without `ngohub_production_ecs_exec_enabled`, apply.
 
 ## 5. Phase 4 — remove NGO Hub's Cognito pool (IRREVERSIBLE)
 
@@ -115,11 +120,12 @@ old login (no Cognito sign-ins in the pool metrics), and Code4 agrees in writing
 1. Export the pool's users (paginate until no `PaginationToken`) and archive the file with a fresh RDS
    snapshot:
    `aws cognito-idp list-users --user-pool-id <production pool> --output json > ngohub-production-users.json`
-2. Turn off deletion protection (the variable from section 1), plan, apply: only the pool's
+2. Plan and apply with `-var ngohub_cognito_deletion_protection_off=true` added: only the pool's
    `deletion_protection` changes.
 3. ```sh
-   terraform plan -var ngohub_own_auth_enabled=true -var vic_ngohub_login_enabled=true \
-     -var ngohub_cognito_removed=true ... -out p4.plan
+   terraform plan -var ngohub_own_auth_enabled=true -var ngohub_production_image_tag=<ngohub_tag> \
+     -var vic_ngohub_login_enabled=true -var ngohub_cognito_deletion_protection_off=true \
+     -var ngohub_cognito_removed=true -var-file=ngohub-production.auto.tfvars -out p4.plan
    ```
    Expected, and nothing else: destroy `module.ngohub_cognito[0]` (pool, client, domain, Lambdas, IAM),
    `aws_cognito_user_pool_client.vic_ngohub_client[0]`; the NGO Hub task and Amplify branch lose
@@ -166,7 +172,7 @@ Only after phase 1's check (VIC calls no Cognito) and the VIC team's go:
 | `OIDC_JWKS` (ID token signing) | the set has a signing key and a published standby (`oidc:generate-keys`). `--rotate-oidc`: the standby signs, a new standby is added, the old key stays third; apply. A day later, `--trim-oidc`; apply | none (clients already know the standby) |
 | `OIDC_COOKIE_KEYS` | new key first, old ones after it; drop the old ones after the session lifetime | none |
 | `JWT_PRIVATE_KEY` / `JWT_PUBLIC_KEY` / `JWT_KEY_ID` | new pair and kid, apply | access tokens (15 min) are refused, the SPA refreshes; refresh tokens are not signed, sessions survive |
-| `AUTH_TOKEN_KEY` | new key, old one in `AUTH_TOKEN_KEY_PREVIOUS` (section 1), apply; rotate each OIDC client secret (panel → rotate) to re-seal it, then drop the previous key | emailed links and codes still pending are refused (never in the 30 days after phase 2) |
+| `AUTH_TOKEN_KEY` | new key, old one in `ngohub_auth_token_key_previous`, apply; rotate each OIDC client secret (panel → rotate) to re-seal it, then drop the previous key | emailed links and codes still pending are refused (never in the 30 days after phase 2) |
 | VIC's `vic_ngohub_client_secret` | panel → rotate on NGO Hub, new value in the tfvars, apply VIC at once | VIC logins with NGO Hub fail between the two steps (minutes) |
 
 Generate new values with `npm run oidc:generate-keys` and take only the key being rotated.

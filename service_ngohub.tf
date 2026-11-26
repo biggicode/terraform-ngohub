@@ -9,6 +9,9 @@ module "ngohub_cognito" {
   root_domain  = var.root_domain
   email_domain = local.mail_domain
 
+  # Production: false only right before removing the pool (null keeps the module's default)
+  deletion_protection = var.ngohub_cognito_deletion_protection_off ? false : null
+
   certificate_arn = aws_acm_certificate.global.arn
 
   auth_domain     = local.ngohub.auth.domain
@@ -118,7 +121,8 @@ module "ngohub_backend" {
   image_tag  = local.ngohub.backend.image.tag
 
   # Staging with own auth: ECS Exec runs the one-off commands (auth:migrate, oidc:register-client)
-  enable_execute_command = local.ngohub_own_auth
+  # Production: only during the change windows (ngohub_production_ecs_exec_enabled)
+  enable_execute_command = local.ngohub_own_auth && (!local.isProduction || var.ngohub_production_ecs_exec_enabled)
 
   use_load_balancer       = true
   lb_dns_name             = aws_lb.main.dns_name

@@ -1,5 +1,5 @@
 # Plans the whole configuration with mocked providers (no AWS access, no state) and checks what the
-# NGO Hub own-auth / OIDC switches (T1, T2, T3) do. Run (terraform >= 1.11, e.g. in Docker):
+# NGO Hub own-auth / OIDC switches (T1, T2, T3, production) do. Run (terraform >= 1.11, e.g. in Docker):
 #   terraform init -backend=false && terraform test
 
 mock_provider "aws" {
@@ -108,7 +108,7 @@ variables {
   vic_apple_key_id                     = "x"
   vic_apple_private_key                = "x"
 
-  # Every switch on: production must ignore them all.
+  # Every switch on; each run turns off what it does not test.
   ngohub_own_auth_enabled  = true
   vic_ngohub_login_enabled = true
   ngohub_cognito_removed   = true
@@ -122,7 +122,7 @@ variables {
   vic_ngohub_client_secret = "s"
 }
 
-run "production_ignores_every_switch" {
+run "production_with_switches_off_is_unchanged" {
   command = plan
 
   plan_options {
@@ -132,6 +132,12 @@ run "production_ignores_every_switch" {
       aws_secretsmanager_secret_version.ngohub_auth, aws_secretsmanager_secret_version.vic_auth,
       module.ngohub_frontend, module.vic_frontend, module.ngohub_iam_user, module.ngohub_backend, module.vic_backend,
     ]
+  }
+
+  variables {
+    ngohub_own_auth_enabled  = false
+    vic_ngohub_login_enabled = false
+    ngohub_cognito_removed   = false
   }
 
   assert {
@@ -165,6 +171,155 @@ run "production_ignores_every_switch" {
   assert {
     condition     = !can(jsondecode(aws_secretsmanager_secret_version.vic_auth.secret_string).ngohub_oidc_client_secret)
     error_message = "production's vic_auth secret must not get the NGO Hub key"
+  }
+}
+
+run "production_own_auth_refuses_the_cognito_image" {
+  command = plan
+
+  plan_options {
+    # Only what the switches touch: SES DKIM, ACM validation and S3 policies cannot be planned on mocks.
+    target = [
+      module.ngohub_cognito, aws_cognito_user_pool_client.vic_ngohub_client,
+      aws_secretsmanager_secret_version.ngohub_auth, aws_secretsmanager_secret_version.vic_auth,
+      module.ngohub_frontend, module.vic_frontend, module.ngohub_iam_user, module.ngohub_backend, module.vic_backend,
+    ]
+  }
+
+  variables {
+    vic_ngohub_login_enabled = false
+    ngohub_cognito_removed   = false
+  }
+
+  expect_failures = [aws_secretsmanager_secret_version.ngohub_auth]
+}
+
+run "production_own_auth" {
+  command = plan
+
+  plan_options {
+    # Only what the switches touch: SES DKIM, ACM validation and S3 policies cannot be planned on mocks.
+    target = [
+      module.ngohub_cognito, aws_cognito_user_pool_client.vic_ngohub_client,
+      aws_secretsmanager_secret_version.ngohub_auth, aws_secretsmanager_secret_version.vic_auth,
+      module.ngohub_frontend, module.vic_frontend, module.ngohub_iam_user, module.ngohub_backend, module.vic_backend,
+    ]
+  }
+
+  variables {
+    ngohub_production_image_tag = "3.0.0"
+    vic_ngohub_login_enabled    = false
+    ngohub_cognito_removed      = false
+  }
+
+  assert {
+    condition     = local.ngohub.backend.image.tag == "3.0.0" && length(aws_secretsmanager_secret.ngohub_auth) == 1
+    error_message = "production own auth: its image and secret"
+  }
+  assert {
+    condition     = [for e in local.ngohub_own_auth_environment : e.value if e.name == "OIDC_ISSUER"][0] == "https://id.ngohub.test"
+    error_message = "the production issuer is id.<root>"
+  }
+  assert {
+    condition     = [for e in local.ngohub_own_auth_environment : e.value if e.name == "OIDC_ALLOW_LOCALHOST_REDIRECTS"][0] == "false"
+    error_message = "no localhost redirects in production"
+  }
+  assert {
+    condition     = length(local.ngohub_own_auth_secrets) == 5 && !can(jsondecode(aws_secretsmanager_secret_version.ngohub_auth[0].secret_string).auth_token_key_previous)
+    error_message = "no previous token key outside a rotation"
+  }
+  assert {
+    condition     = length(module.ngohub_cognito) == 1 && length(local.ngohub_cognito_environment) == 3
+    error_message = "Cognito stays until phase 4"
+  }
+}
+
+run "production_auth_token_key_rotation" {
+  command = plan
+
+  plan_options {
+    # Only what the switches touch: SES DKIM, ACM validation and S3 policies cannot be planned on mocks.
+    target = [
+      module.ngohub_cognito, aws_cognito_user_pool_client.vic_ngohub_client,
+      aws_secretsmanager_secret_version.ngohub_auth, aws_secretsmanager_secret_version.vic_auth,
+      module.ngohub_frontend, module.vic_frontend, module.ngohub_iam_user, module.ngohub_backend, module.vic_backend,
+    ]
+  }
+
+  variables {
+    ngohub_production_image_tag    = "3.0.0"
+    vic_ngohub_login_enabled       = false
+    ngohub_cognito_removed         = false
+    ngohub_auth_token_key_previous = "old"
+  }
+
+  assert {
+    condition     = contains([for e in local.ngohub_own_auth_secrets : e.name], "AUTH_TOKEN_KEY_PREVIOUS") && jsondecode(aws_secretsmanager_secret_version.ngohub_auth[0].secret_string).auth_token_key_previous == "old"
+    error_message = "AUTH_TOKEN_KEY_PREVIOUS reaches the task during a rotation"
+  }
+}
+
+run "production_vic_login_refuses_vic_1" {
+  command = plan
+
+  plan_options {
+    # Only what the switches touch: SES DKIM, ACM validation and S3 policies cannot be planned on mocks.
+    target = [
+      module.ngohub_cognito, aws_cognito_user_pool_client.vic_ngohub_client,
+      aws_secretsmanager_secret_version.ngohub_auth, aws_secretsmanager_secret_version.vic_auth,
+      module.ngohub_frontend, module.vic_frontend, module.ngohub_iam_user, module.ngohub_backend, module.vic_backend,
+    ]
+  }
+
+  variables {
+    ngohub_production_image_tag = "3.0.0"
+    ngohub_cognito_removed      = false
+  }
+
+  expect_failures = [aws_secretsmanager_secret_version.vic_auth]
+}
+
+run "production_cognito_removal_needs_protection_off" {
+  command = plan
+
+  plan_options {
+    # Only what the switches touch: SES DKIM, ACM validation and S3 policies cannot be planned on mocks.
+    target = [
+      module.ngohub_cognito, aws_cognito_user_pool_client.vic_ngohub_client,
+      aws_secretsmanager_secret_version.ngohub_auth, aws_secretsmanager_secret_version.vic_auth,
+      module.ngohub_frontend, module.vic_frontend, module.ngohub_iam_user, module.ngohub_backend, module.vic_backend,
+    ]
+  }
+
+  variables {
+    ngohub_production_image_tag = "3.0.0"
+    vic_ngohub_login_enabled    = false
+  }
+
+  expect_failures = [aws_secretsmanager_secret_version.ngohub_auth]
+}
+
+run "production_cognito_removed" {
+  command = plan
+
+  plan_options {
+    # Only what the switches touch: SES DKIM, ACM validation and S3 policies cannot be planned on mocks.
+    target = [
+      module.ngohub_cognito, aws_cognito_user_pool_client.vic_ngohub_client,
+      aws_secretsmanager_secret_version.ngohub_auth, aws_secretsmanager_secret_version.vic_auth,
+      module.ngohub_frontend, module.vic_frontend, module.ngohub_iam_user, module.ngohub_backend, module.vic_backend,
+    ]
+  }
+
+  variables {
+    ngohub_production_image_tag            = "3.0.0"
+    vic_ngohub_login_enabled               = false
+    ngohub_cognito_deletion_protection_off = true
+  }
+
+  assert {
+    condition     = length(module.ngohub_cognito) == 0 && length(aws_cognito_user_pool_client.vic_ngohub_client) == 0 && local.ngohub_cognito_environment == []
+    error_message = "phase 4 removes the pool, VIC's old client and the COGNITO_* settings"
   }
 }
 

@@ -1,4 +1,4 @@
-# VIC: login with NGO Hub (OIDC client, VIC issues 01-05), staging only: see local.vic_ngohub_login.
+# VIC: login with NGO Hub (OIDC client, VIC issues 01-05): see local.vic_ngohub_login.
 # With the switch off the VIC task definition, its secret and the Amplify branch are unchanged.
 
 locals {

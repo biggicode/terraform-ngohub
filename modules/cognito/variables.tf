@@ -203,3 +203,9 @@ variable "login_pre_authentication_check" {
   })
   default = null
 }
+
+variable "deletion_protection" {
+  description = "Overrides the default (on in production only); false right before deleting the pool."
+  type        = bool
+  default     = null
+}
