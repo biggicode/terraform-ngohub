@@ -75,7 +75,8 @@ npm run auth:migrate -- --status      # how many emails are held
 npm run auth:migrate -- --release     # send the held emails
 ```
 
-Restricted users also get the transition email; their login is still refused (AUTH_004).
+Restricted users (and users of restricted NGOs) get an identity but no transition email; the report counts
+them as `restricted`.
 
 Smoke test: login with link and with code, an invite, restricting a user, deleting one, `/new`.
 Decision 3: staging has test data, no `MAIL_ALLOWLIST` needed (set `ngohub_mail_allowlist` otherwise).
