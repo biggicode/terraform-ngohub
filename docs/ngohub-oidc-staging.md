@@ -56,8 +56,12 @@ ECS Exec into the NGO Hub task (`aws ecs execute-command --cluster ... --task ..
 ```sh
 npm run auth:migrate -- --dry-run     # counts, duplicates
 npm run auth:migrate                  # identities + held transition emails
-# smoke test (below), then release the emails
+npm run auth:migrate -- --status      # how many emails are held
+# smoke test (below), then:
+npm run auth:migrate -- --release     # send the held emails
 ```
+
+Restricted users also get the transition email; their login is still refused (AUTH_004).
 
 Smoke test: login with link and with code, an invite, restricting a user, deleting one, `/new`.
 Decision 3: staging has test data, no `MAIL_ALLOWLIST` needed (set `ngohub_mail_allowlist` otherwise).
@@ -65,10 +69,11 @@ Decision 3: staging has test data, no `MAIL_ALLOWLIST` needed (set `ngohub_mail_
 ## 5. Register VIC as a client
 
 Either the super-admin panel (Edit application → "Autentificare cu NGO Hub (OIDC)") on the VIC
-application, or in the task:
+application, or in the task (`--application-id` links the client to the VIC application, whose name and
+logo the login page shows; without it the page says "vic"):
 
 ```sh
-npm run oidc:register-client -- --client-id vic --first-party \
+npm run oidc:register-client -- --client-id vic --first-party --application-id <VIC application id> \
   --scopes "openid email profile organization" \
   --redirect-uri https://vic-staging.<root>/login/ngohub/callback \
   --redirect-uri http://localhost:5173/login/ngohub/callback
@@ -122,10 +127,22 @@ Only after steps 3–7 work and nobody on staging needs the old login.
 3. The first plan on **production** after this change must show only `moved` for
    `module.ngohub_cognito` → `module.ngohub_cognito[0]` and the VIC client, no destroy.
 
+## Local rehearsal (26 November 2026)
+
+Steps 1, 2, 4, 5 and 7, plus the step 6 scenarios, run locally against the real onghub image
+(`feat/ngohub-own-auth`, linux/amd64) on a copy of the data, with the commands above run inside the
+container. Results: pre-flight catches a case duplicate; the image applies its migrations at boot;
+`auth:migrate` dry run writes nothing, a second run creates nothing, `--release` sends the held emails;
+code login, refresh, logout; VIC login through the container's issuer: an admin of a linked organization
+joins it (the other admins get the email), an employee gets AUTH_017, a mixed-case NGO Hub email still
+finds the VIC admin, `prompt=login` refuses an older NGO Hub login (FRESH_LOGIN_REQUIRED);
+`ngohub:link-orgs` matches `RO11111111` to `11111111`, and a second `--apply` changes nothing.
+Not covered: terraform plan/apply, ALB/DNS/Amplify, SES, step 8.
+
 ## Rollback
 
 - VIC: `vic_ngohub_login_enabled=false` and apply (the button disappears, the API answers AUTH_020).
 - NGO Hub before step 4: `ngohub_own_auth_enabled=false`, image tag back to `2.0.3`, apply.
 - NGO Hub after step 4: also restore the snapshot from step 1 and empty the held transition queue
-  (`TransitionMailService.drop()`).
+  (`npm run auth:migrate -- --drop`, before `--release`).
 - After step 8 (T3) there is no way back to Cognito on staging.
