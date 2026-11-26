@@ -11,10 +11,24 @@ Code: onghub `feat/ngohub-own-auth` (O0–O15), vic `feat/ngohub-oidc` (VIC 01�
 
 - [ ] T0 inventory done (Cognito pre-auth trigger, other pool clients, RDS Postgres ≥ 13, Redis memory,
       SES quota, proxy hops). If anything sits between the ALB and the task, set `TRUST_PROXY_HOPS`.
-- [ ] onghub: `develop` brought up to `main`, `feat/ngohub-own-auth` merged into `develop`, the image built
-      by `build-image.yml` for `develop`. Note its tag: `<ngohub_tag>`.
-- [ ] The Amplify NGO Hub app builds `develop`; it must contain the own-login SPA before step 3.
-- [ ] vic: `feat/ngohub-oidc` merged into `develop`, a release tag built (`v2.0.0-rc.N`): `<vic_tag>`.
+- [ ] The code staging runs, either way:
+  - **Before merging (recommended first):** the feature branches pushed to code4romania/onghub and
+    code4romania/vic (Amplify builds only from those repos). Backend images built from them and pushed by
+    hand to ECR, since `build-image.yml` only builds `main`, `develop` and `v*` tags:
+    ```sh
+    # onghub/backend at feat/ngohub-own-auth (same for vic/backend at feat/ngohub-oidc)
+    docker build --platform linux/amd64 -t <ecr repo>:<tag> . && docker push <ecr repo>:<tag>
+    ```
+    Then plan every step below with `-var ngohub_staging_image_tag=<ngohub_tag>`,
+    `-var vic_staging_image_tag=<vic_tag>`, `-var ngohub_staging_frontend_branch=feat/ngohub-own-auth`,
+    `-var vic_staging_frontend_branch=feat/ngohub-oidc`. Changing a frontend branch **replaces** the
+    Amplify branch (`develop` is deleted there and recreated when the variable goes back; its settings
+    come from terraform, its build history is lost), and the staging site is down until the first build
+    finishes.
+  - **After merging:** `develop` brought up to `main`, `feat/ngohub-own-auth` and `feat/ngohub-oidc`
+    merged into their `develop`, images built by CI (`<ngohub_tag>`, VIC `v2.0.0-rc.N` = `<vic_tag>`),
+    the frontend variables left at `develop`.
+- [ ] The NGO Hub frontend Amplify builds must contain the own-login SPA before step 3.
 
 ## 1. Snapshot and pre-flight
 
@@ -83,12 +97,12 @@ The secret is shown once: put it straight into the staging tfvars as `vic_ngohub
 
 ## 6. VIC with "Continuă cu NGO Hub" (T2)
 
-Set VIC's staging image to `<vic_tag>` (`locals.tf`, `local.vic.backend.image.tag`), then:
+Set VIC's staging image with `-var vic_staging_image_tag=<vic_tag>`, then:
 
 ```sh
 terraform plan \
   -var ngohub_own_auth_enabled=true -var ngohub_staging_image_tag=<ngohub_tag> \
-  -var vic_ngohub_login_enabled=true \
+  -var vic_ngohub_login_enabled=true -var vic_staging_image_tag=<vic_tag> \
   -var-file=ngohub-staging.auto.tfvars -out t2.plan
 ```
 

@@ -50,7 +50,7 @@ module "ngohub_frontend" {
 
   name        = "ngohub"
   repository  = "https://github.com/code4romania/onghub"
-  branch      = local.isProduction ? "main" : "develop"
+  branch      = local.ngohub.frontend.branch
   environment = var.environment
 
 

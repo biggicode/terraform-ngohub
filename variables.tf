@@ -228,6 +228,24 @@ variable "ngohub_staging_image_tag" {
   default     = "2.0.3"
 }
 
+variable "ngohub_staging_frontend_branch" {
+  description = "Staging: onghub branch the NGO Hub Amplify app builds (a branch of code4romania/onghub). Changing it replaces the Amplify branch."
+  type        = string
+  default     = "develop"
+}
+
+variable "vic_staging_frontend_branch" {
+  description = "Staging: vic branch the VIC Amplify app builds (a branch of code4romania/vic). Changing it replaces the Amplify branch."
+  type        = string
+  default     = "develop"
+}
+
+variable "vic_staging_image_tag" {
+  description = "Staging: VIC backend image tag (production stays pinned in locals.tf)."
+  type        = string
+  default     = "2.0.0-rc.4"
+}
+
 variable "ngohub_jwt_private_key" {
   description = "NGO Hub JWT signing key: RSA private key PEM, base64 encoded on one line."
   type        = string

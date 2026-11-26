@@ -151,6 +151,10 @@ run "production_ignores_every_switch" {
     error_message = "production keeps the pinned NGO Hub image"
   }
   assert {
+    condition     = local.ngohub.frontend.branch == "main" && local.vic.frontend.branch == "main" && local.vic.backend.image.tag == "1.1.0"
+    error_message = "production builds main and keeps VIC 1.1.0"
+  }
+  assert {
     condition     = local.ngohub_own_auth_environment == [] && local.ngohub_own_auth_secrets == [] && local.vic_ngohub_environment == [] && local.vic_ngohub_secrets == []
     error_message = "no own-auth or OIDC settings in production"
   }
@@ -191,6 +195,36 @@ run "staging_with_switches_off_is_unchanged" {
   assert {
     condition     = local.ngohub_own_auth_environment == [] && local.vic_ngohub_environment == []
     error_message = "settings added with every switch off"
+  }
+  assert {
+    condition     = local.ngohub.frontend.branch == "develop" && local.vic.frontend.branch == "develop" && local.vic.backend.image.tag == "2.0.0-rc.4"
+    error_message = "staging builds develop and runs VIC 2.0.0-rc.4 by default"
+  }
+}
+
+run "staging_feature_branches_before_merge" {
+  command = plan
+
+  plan_options {
+    # Only what the switches touch: SES DKIM, ACM validation and S3 policies cannot be planned on mocks.
+    target = [
+      module.ngohub_cognito, aws_cognito_user_pool_client.vic_ngohub_client,
+      aws_secretsmanager_secret_version.ngohub_auth, aws_secretsmanager_secret_version.vic_auth,
+      module.ngohub_frontend, module.vic_frontend, module.ngohub_iam_user, module.ngohub_backend, module.vic_backend,
+    ]
+  }
+
+  variables {
+    environment                    = "staging"
+    ngohub_cognito_removed         = false
+    ngohub_staging_frontend_branch = "feat/ngohub-own-auth"
+    vic_staging_frontend_branch    = "feat/ngohub-oidc"
+    vic_staging_image_tag          = "ngohub-oidc-1"
+  }
+
+  assert {
+    condition     = local.ngohub.frontend.branch == "feat/ngohub-own-auth" && local.vic.frontend.branch == "feat/ngohub-oidc" && local.vic.backend.image.tag == "ngohub-oidc-1"
+    error_message = "staging takes the feature branches and image"
   }
 }
 
