@@ -5,6 +5,9 @@ locals {
   # the Amplify branch must already contain the feature. Off = exactly the current setup.
   ngohub_own_auth = !local.isProduction && var.ngohub_own_auth_enabled
 
+  # VIC: "Continuă cu NGO Hub" (T2). Needs the NGO Hub provider above and the VIC client registered on it.
+  vic_ngohub_login = local.ngohub_own_auth && var.vic_ngohub_login_enabled
+
   namespace  = "ngohub-${var.environment}"
   env_suffix = local.isProduction ? "" : "-${var.environment}"
 

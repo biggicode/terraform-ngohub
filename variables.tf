@@ -274,3 +274,24 @@ variable "ngohub_mail_allowlist" {
   type        = string
   default     = ""
 }
+
+### VIC: login with NGO Hub (staging only; needs ngohub_own_auth_enabled)
+
+variable "vic_ngohub_login_enabled" {
+  description = "Staging: show and serve \"Continuă cu NGO Hub\" in VIC (needs ngohub_own_auth_enabled and the VIC client registered with oidc:register-client)."
+  type        = bool
+  default     = false
+}
+
+variable "vic_ngohub_client_id" {
+  description = "VIC's OIDC client id at NGO Hub."
+  type        = string
+  default     = "vic"
+}
+
+variable "vic_ngohub_client_secret" {
+  description = "VIC's OIDC client secret, printed once by oidc:register-client (or the super admin panel)."
+  type        = string
+  sensitive   = true
+  default     = null
+}

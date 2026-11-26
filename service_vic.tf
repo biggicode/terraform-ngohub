@@ -108,7 +108,7 @@ module "vic_frontend" {
 
   github_access_token = var.github_access_token
 
-  environment_variables = {
+  environment_variables = merge({
     AMPLIFY_MONOREPO_APP_ROOT = "frontend"
 
     VITE_API_URL          = "https://${local.vic.backend.domain}"
@@ -124,7 +124,10 @@ module "vic_frontend" {
     VITE_TERMS_URL              = "https://www.ngohub.ro/ro/termeni-si-conditii"
     VITE_PRIVACY_URL            = "https://www.ngohub.ro/ro/politica-de-confidentialitate"
     VITE_HELP_CENTER_URL        = "https://www.ngohub.ro/ro/vic"
-  }
+    },
+    # "Continuă cu NGO Hub" on the login page, only with the switch on
+    { for name, value in { VITE_NGOHUB_ENABLED = "true" } : name => value if local.vic_ngohub_login },
+  )
 
   build_spec = <<-EOT
     version: 1
@@ -199,7 +202,7 @@ module "vic_backend" {
     }
   ]
 
-  environment = [
+  environment = concat([
     {
       name  = "ONGHUB_URL"
       value = "https://${local.vic.frontend.domain}"
@@ -342,9 +345,9 @@ module "vic_backend" {
       name  = "REDIS_KEY_PREFIX"
       value = "vic:"
     },
-  ]
+  ], local.vic_ngohub_environment)
 
-  secrets = [
+  secrets = concat([
     {
       name      = "ENCRYPTION_KEY"
       valueFrom = aws_secretsmanager_secret.encryption_key.arn
@@ -406,7 +409,7 @@ module "vic_backend" {
       name      = "MAINTENANCE_ALLOWED_IPS"
       valueFrom = "${aws_secretsmanager_secret.vic_auth.arn}:maintenance_allowed_ips::"
     },
-  ]
+  ], local.vic_ngohub_secrets)
 
   allowed_secrets = [
     aws_secretsmanager_secret.expo_push_notifications_access_token.arn,
@@ -425,13 +428,23 @@ resource "aws_secretsmanager_secret" "vic_auth" {
 
 resource "aws_secretsmanager_secret_version" "vic_auth" {
   secret_id = aws_secretsmanager_secret.vic_auth.id
-  secret_string = jsonencode({
+  secret_string = jsonencode(merge({
     jwt_private_key         = var.vic_jwt_private_key
     jwt_public_key          = var.vic_jwt_public_key
     auth_token_key          = var.vic_auth_token_key
     apple_private_key       = var.vic_apple_private_key
     maintenance_allowed_ips = var.vic_maintenance_allowed_ips
-  })
+    },
+    # Login with NGO Hub (T2): the key exists only with the switch on, so production's secret is unchanged
+    { for key, value in { ngohub_oidc_client_secret = var.vic_ngohub_client_secret } : key => value if local.vic_ngohub_login },
+  ))
+
+  lifecycle {
+    precondition {
+      condition     = !local.vic_ngohub_login || (var.vic_ngohub_client_secret != null && var.vic_ngohub_client_secret != "")
+      error_message = "vic_ngohub_login_enabled needs vic_ngohub_client_secret (from oidc:register-client on NGO Hub staging)."
+    }
+  }
 }
 
 resource "aws_secretsmanager_secret" "expo_push_notifications_access_token" {
