@@ -58,7 +58,7 @@ module "ngohub_frontend" {
   github_access_token    = var.github_access_token
   basic_auth_credentials = local.isProduction ? null : var.staging_auth_credentials
 
-  environment_variables = {
+  environment_variables = merge({
     AMPLIFY_MONOREPO_APP_ROOT      = "frontend"
     REACT_APP_API_URL              = "https://${local.ngohub.backend.domain}"
     REACT_APP_AWS_REGION           = var.region
@@ -68,7 +68,16 @@ module "ngohub_frontend" {
     REACT_APP_USER_POOL_ID         = module.ngohub_cognito.user_pool_id
     REACT_APP_PUBLIC_ASSETS_URL    = module.s3_public.bucket_regional_domain_name
     REACT_APP_HOME_URL             = var.ngohub_landing_url
-  }
+    },
+    # Own login in the SPA and the OIDC interaction page (O8/O11), only with the switch on
+    { for name, value in {
+      REACT_APP_OWN_AUTH    = "true"
+      REACT_APP_OIDC_ISSUER = "https://${local.ngohub.oidc.domain}"
+    } : name => value if local.ngohub_own_auth },
+  )
+
+  # The interaction and login pages must not be framed, and keep their URL out of the Referer.
+  custom_headers = local.ngohub_own_auth ? local.ngohub_spa_security_headers : null
 
   build_spec = <<-EOT
     version: 1
@@ -109,7 +118,7 @@ module "ngohub_backend" {
   lb_zone_id              = aws_lb.main.zone_id
   lb_vpc_id               = module.vpc.vpc_id
   lb_listener_arn         = aws_lb_listener.https.arn
-  lb_hosts                = [local.ngohub.backend.domain]
+  lb_hosts                = local.ngohub_own_auth ? [local.ngohub.backend.domain, local.ngohub.oidc.domain] : [local.ngohub.backend.domain]
   lb_domain_zone_id       = data.aws_route53_zone.main.zone_id
   lb_health_check_enabled = true
   lb_path                 = "/health"
@@ -143,7 +152,7 @@ module "ngohub_backend" {
     }
   ]
 
-  environment = [
+  environment = concat([
     {
       name  = "ONGHUB_URL"
       value = "https://${local.ngohub.frontend.domain}"
@@ -224,9 +233,9 @@ module "ngohub_backend" {
       name  = "SENTRY_DSN"
       value = var.sentry_dsn_ngohub
     },
-  ]
+  ], local.ngohub_own_auth_environment)
 
-  secrets = [
+  secrets = concat([
     {
       name      = "ENCRYPTION_KEY"
       valueFrom = aws_secretsmanager_secret.encryption_key.arn
@@ -263,13 +272,13 @@ module "ngohub_backend" {
       name      = "MAIL_PASS"
       valueFrom = "${module.ngohub_iam_user.secret_arn}:ses_smtp_password::"
     },
-  ]
+  ], local.ngohub_own_auth_secrets)
 
-  allowed_secrets = [
+  allowed_secrets = concat([
     aws_secretsmanager_secret.encryption_key.arn,
     aws_secretsmanager_secret.rds.arn,
     module.ngohub_iam_user.secret_arn,
-  ]
+  ], aws_secretsmanager_secret.ngohub_auth[*].arn)
 }
 
 resource "aws_secretsmanager_secret" "encryption_key" {

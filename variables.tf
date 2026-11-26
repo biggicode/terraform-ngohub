@@ -213,3 +213,64 @@ variable "vic_apple_private_key" {
   type        = string
   sensitive   = true
 }
+
+### NGO Hub own login and OIDC provider (staging only; ignored in production)
+
+variable "ngohub_own_auth_enabled" {
+  description = "Staging: run NGO Hub with its own login and as OIDC provider (needs an onghub image and develop branch with the feature, and every ngohub_auth_* value)."
+  type        = bool
+  default     = false
+}
+
+variable "ngohub_staging_image_tag" {
+  description = "Staging: NGO Hub backend image tag (production stays pinned in locals.tf)."
+  type        = string
+  default     = "2.0.3"
+}
+
+variable "ngohub_jwt_private_key" {
+  description = "NGO Hub JWT signing key: RSA private key PEM, base64 encoded on one line."
+  type        = string
+  sensitive   = true
+  default     = null
+}
+
+variable "ngohub_jwt_public_key" {
+  description = "NGO Hub JWT public key PEM, base64 encoded on one line."
+  type        = string
+  sensitive   = true
+  default     = null
+}
+
+variable "ngohub_jwt_key_id" {
+  description = "NGO Hub JWT key id (kid), e.g. ngohub-staging-2026-11."
+  type        = string
+  default     = null
+}
+
+variable "ngohub_auth_token_key" {
+  description = "NGO Hub key for login codes, links and sealed OIDC client secrets: 32 random bytes, base64."
+  type        = string
+  sensitive   = true
+  default     = null
+}
+
+variable "ngohub_oidc_jwks" {
+  description = "OIDC ID token signing keys, JSON {\"keys\":[<private RSA JWK with kid>]}."
+  type        = string
+  sensitive   = true
+  default     = null
+}
+
+variable "ngohub_oidc_cookie_keys" {
+  description = "OIDC provider cookie keys, JSON array of random strings (newest first)."
+  type        = string
+  sensitive   = true
+  default     = null
+}
+
+variable "ngohub_mail_allowlist" {
+  description = "Optional MAIL_ALLOWLIST for NGO Hub (comma separated, *@domain allowed); empty = every recipient (decision 3: staging has test data)."
+  type        = string
+  default     = ""
+}

@@ -3,7 +3,8 @@ resource "aws_amplify_app" "this" {
   repository   = var.repository
   access_token = var.github_access_token
 
-  build_spec = var.build_spec
+  build_spec     = var.build_spec
+  custom_headers = var.custom_headers
 
   # This needs to be first
   dynamic "custom_rule" {

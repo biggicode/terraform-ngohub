@@ -41,3 +41,9 @@ variable "basic_auth_credentials" {
   type    = string
   default = null
 }
+
+variable "custom_headers" {
+  description = "Optional Amplify customHeaders YAML."
+  type        = string
+  default     = null
+}

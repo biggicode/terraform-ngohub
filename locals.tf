@@ -1,6 +1,10 @@
 locals {
   isProduction = var.environment == "production"
 
+  # NGO Hub own login + OIDC provider (T1). Staging only, and only once switched on: the onghub image and
+  # the Amplify branch must already contain the feature. Off = exactly the current setup.
+  ngohub_own_auth = !local.isProduction && var.ngohub_own_auth_enabled
+
   namespace  = "ngohub-${var.environment}"
   env_suffix = local.isProduction ? "" : "-${var.environment}"
 
@@ -24,8 +28,14 @@ locals {
       domain = "api${local.env_suffix}.${var.root_domain}"
       image = {
         repo = data.aws_ecr_repository.ngohub_backend.repository_url
-        tag  = "2.0.3"
+        tag  = local.isProduction ? "2.0.3" : var.ngohub_staging_image_tag
       }
+    }
+
+    # The OIDC issuer (decision 1: id.<root> in production, id-staging.<root> on staging). Served by the
+    # NGO Hub backend; the provider routes only answer for this host (OIDC_ISSUER_HOST).
+    oidc = {
+      domain = "id${local.env_suffix}.${var.root_domain}"
     }
 
     frontend = {
