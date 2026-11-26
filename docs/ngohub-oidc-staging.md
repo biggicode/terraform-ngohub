@@ -1,6 +1,6 @@
 # NGO Hub own login + OIDC, and VIC "Continuă cu NGO Hub": staging rollout
 
-Staging only. Production is a separate runbook (T4) and nothing here changes it: every resource and
+Staging only. Production is a separate runbook (T4, `docs/ngohub-oidc-production.md`) and nothing here changes it: every resource and
 setting below is behind `ngohub_own_auth_enabled` / `vic_ngohub_login_enabled`, which are ignored when
 `environment = "production"`. Before each apply, check that the plan touches only staging resources.
 
