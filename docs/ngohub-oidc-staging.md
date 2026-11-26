@@ -151,6 +151,10 @@ code login, refresh, logout; VIC login through the container's issuer: an admin 
 joins it (the other admins get the email), an employee gets AUTH_017, a mixed-case NGO Hub email still
 finds the VIC admin, `prompt=login` refuses an older NGO Hub login (FRESH_LOGIN_REQUIRED);
 `ngohub:link-orgs` matches `RO11111111` to `11111111`, and a second `--apply` changes nothing.
+Then the same VIC steps with the VIC image too (`feat/ngohub-oidc`, linux/amd64, as in step 0's
+pre-merge route): it passes VIC's production environment check with the settings terraform gives the task
+(`AWS_S3_BUCKET_NAME`, `AWS_S3_BUCKET_NAME_PUBLIC`, `MAIL_FROM`), logs an NGO Hub admin in through the NGO
+Hub image, refuses an employee (AUTH_017), and `ngohub:link-orgs:prod` runs inside it.
 Not covered: terraform plan/apply, ALB/DNS/Amplify, SES, step 8.
 
 ## Rollback
