@@ -55,8 +55,9 @@ module "vic_cognito" {
 }
 
 resource "aws_cognito_user_pool_client" "vic_ngohub_client" {
+  count        = local.ngohub_cognito ? 1 : 0
   name         = "${local.vic.namespace}-client"
-  user_pool_id = module.ngohub_cognito.user_pool_id
+  user_pool_id = module.ngohub_cognito[0].user_pool_id
 
   access_token_validity = 1
 

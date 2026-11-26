@@ -1,5 +1,6 @@
 module "ngohub_cognito" {
   source = "./modules/cognito"
+  count  = local.ngohub_cognito ? 1 : 0
 
   namespace   = local.ngohub.namespace
   environment = var.environment
@@ -59,16 +60,19 @@ module "ngohub_frontend" {
   basic_auth_credentials = local.isProduction ? null : var.staging_auth_credentials
 
   environment_variables = merge({
-    AMPLIFY_MONOREPO_APP_ROOT      = "frontend"
-    REACT_APP_API_URL              = "https://${local.ngohub.backend.domain}"
-    REACT_APP_AWS_REGION           = var.region
-    REACT_APP_COGNITO_OAUTH_DOMAIN = module.ngohub_cognito.oauth_domain
-    REACT_APP_FRONTEND_URL         = "https://${local.ngohub.frontend.domain}"
-    REACT_APP_USER_POOL_CLIENT_ID  = module.ngohub_cognito.user_pool_client_id
-    REACT_APP_USER_POOL_ID         = module.ngohub_cognito.user_pool_id
-    REACT_APP_PUBLIC_ASSETS_URL    = module.s3_public.bucket_regional_domain_name
-    REACT_APP_HOME_URL             = var.ngohub_landing_url
+    AMPLIFY_MONOREPO_APP_ROOT   = "frontend"
+    REACT_APP_API_URL           = "https://${local.ngohub.backend.domain}"
+    REACT_APP_AWS_REGION        = var.region
+    REACT_APP_FRONTEND_URL      = "https://${local.ngohub.frontend.domain}"
+    REACT_APP_PUBLIC_ASSETS_URL = module.s3_public.bucket_regional_domain_name
+    REACT_APP_HOME_URL          = var.ngohub_landing_url
     },
+    # Amplify/Cognito login, until T3 removes the pool on staging
+    { for name, value in {
+      REACT_APP_COGNITO_OAUTH_DOMAIN = one(module.ngohub_cognito[*].oauth_domain)
+      REACT_APP_USER_POOL_CLIENT_ID  = one(module.ngohub_cognito[*].user_pool_client_id)
+      REACT_APP_USER_POOL_ID         = one(module.ngohub_cognito[*].user_pool_id)
+    } : name => value if local.ngohub_cognito },
     # Own login in the SPA and the OIDC interaction page (O8/O11), only with the switch on
     { for name, value in {
       REACT_APP_OWN_AUTH    = "true"
@@ -176,18 +180,7 @@ module "ngohub_backend" {
       name  = "DATABASE_NAME"
       value = "ngohub"
     },
-    {
-      name  = "COGNITO_CLIENT_ID"
-      value = module.ngohub_cognito.user_pool_client_id
-    },
-    {
-      name  = "COGNITO_USER_POOL_ID"
-      value = module.ngohub_cognito.user_pool_id
-    },
-    {
-      name  = "COGNITO_REGION"
-      value = var.region
-    },
+    ], local.ngohub_cognito_environment, [
     {
       name  = "MAIL_HOST"
       value = "email-smtp.${var.region}.amazonaws.com"
@@ -333,17 +326,19 @@ data "aws_iam_policy_document" "ngohub_iam_user_policy" {
     ]
   }
 
-  statement {
-    actions = [
-      "cognito-idp:AdminCreateUser",
-      "cognito-idp:AdminDeleteUser",
-      "cognito-idp:AdminUpdateUserAttributes",
-      "cognito-idp:AdminUserGlobalSignOut",
-    ]
+  dynamic "statement" {
+    for_each = module.ngohub_cognito[*].arn
 
-    resources = [
-      module.ngohub_cognito.arn
-    ]
+    content {
+      actions = [
+        "cognito-idp:AdminCreateUser",
+        "cognito-idp:AdminDeleteUser",
+        "cognito-idp:AdminUpdateUserAttributes",
+        "cognito-idp:AdminUserGlobalSignOut",
+      ]
+
+      resources = [statement.value]
+    }
   }
 }
 

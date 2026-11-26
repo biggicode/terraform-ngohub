@@ -103,10 +103,29 @@ in VIC, then "Continuă cu NGO Hub" asks for a new code.
 # review the report (conflicts and candidates are never written), then the same with --apply
 ```
 
+## 8. Remove NGO Hub's Cognito on staging (T3) — IRREVERSIBLE
+
+Only after steps 3–7 work and nobody on staging needs the old login.
+
+1. Export the pool's users and keep the file with the snapshot:
+   `aws cognito-idp list-users --user-pool-id <staging pool> --output json > ngohub-staging-users.json`
+   (paginate until there is no `PaginationToken`).
+2. ```sh
+   terraform plan -var ngohub_own_auth_enabled=true -var ngohub_cognito_removed=true \
+     -var ngohub_staging_image_tag=<ngohub_tag> -var vic_ngohub_login_enabled=true \
+     -var-file=ngohub-staging.auto.tfvars -out t3.plan
+   ```
+   Expected: destroy `module.ngohub_cognito[0]` (pool, client, domain, lambdas, IAM) and
+   `aws_cognito_user_pool_client.vic_ngohub_client[0]`; the NGO Hub task and Amplify branch lose the
+   `COGNITO_*` / `REACT_APP_COGNITO_*` / `REACT_APP_USER_POOL_*` settings; the NGO Hub IAM user loses its
+   `cognito-idp` statement. Nothing else. On staging the pool has no deletion protection.
+3. The first plan on **production** after this change must show only `moved` for
+   `module.ngohub_cognito` → `module.ngohub_cognito[0]` and the VIC client, no destroy.
+
 ## Rollback
 
 - VIC: `vic_ngohub_login_enabled=false` and apply (the button disappears, the API answers AUTH_020).
 - NGO Hub before step 4: `ngohub_own_auth_enabled=false`, image tag back to `2.0.3`, apply.
 - NGO Hub after step 4: also restore the snapshot from step 1 and empty the held transition queue
   (`TransitionMailService.drop()`).
-- After T3 (Cognito removed on staging) there is no way back to Cognito.
+- After step 8 (T3) there is no way back to Cognito on staging.

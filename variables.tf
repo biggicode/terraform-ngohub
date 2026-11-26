@@ -295,3 +295,9 @@ variable "vic_ngohub_client_secret" {
   sensitive   = true
   default     = null
 }
+
+variable "ngohub_cognito_removed" {
+  description = "Staging, IRREVERSIBLE: delete NGO Hub's Cognito user pool, its lambdas and VIC's old client on it (T3). Needs ngohub_own_auth_enabled; ignored in production."
+  type        = bool
+  default     = false
+}

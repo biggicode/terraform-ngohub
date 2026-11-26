@@ -8,6 +8,10 @@ locals {
   # VIC: "Continuă cu NGO Hub" (T2). Needs the NGO Hub provider above and the VIC client registered on it.
   vic_ngohub_login = local.ngohub_own_auth && var.vic_ngohub_login_enabled
 
+  # T3: NGO Hub's Cognito pool removed, staging only and only once own auth runs there. IRREVERSIBLE on
+  # staging (the pool and its users are deleted): export list-users first (docs/ngohub-oidc-staging.md).
+  ngohub_cognito = !(local.ngohub_own_auth && var.ngohub_cognito_removed)
+
   namespace  = "ngohub-${var.environment}"
   env_suffix = local.isProduction ? "" : "-${var.environment}"
 
