@@ -10,7 +10,9 @@ Code: onghub `feat/ngohub-own-auth` (O0–O15), vic `feat/ngohub-oidc` (VIC 01�
 ## 0. Before
 
 - [ ] T0 inventory done (Cognito pre-auth trigger, other pool clients, RDS Postgres ≥ 13, Redis memory,
-      SES quota, proxy hops). If anything sits between the ALB and the task, set `TRUST_PROXY_HOPS`.
+      SES quota, proxy hops): `AWS_PROFILE=<staging> bash scripts/t0-inventory.sh > t0-staging.txt 2>&1`
+      (read-only calls only, staging fixed in the script; not yet run against AWS). If anything sits
+      between the ALB and the task, set `TRUST_PROXY_HOPS`.
 - [ ] The code staging runs, either way:
   - **Before merging (recommended first):** the feature branches pushed to code4romania/onghub and
     code4romania/vic (Amplify builds only from those repos). Backend images built from them and pushed by
@@ -95,6 +97,9 @@ npm run oidc:register-client -- --client-id vic --first-party --application-id <
 ```
 
 The secret is shown once: put it straight into the staging tfvars as `vic_ngohub_client_secret`.
+
+Plan 6.2: the VIC application's login link in NGO Hub (Edit application → login link) points at VIC's login
+page with "Continuă cu NGO Hub": `https://vic-staging.<root>/login`.
 
 ## 6. VIC with "Continuă cu NGO Hub" (T2)
 
