@@ -125,7 +125,11 @@ old login (no Cognito sign-ins in the pool metrics), and Code4 agrees in writing
    `aws_cognito_user_pool_client.vic_ngohub_client[0]`; the NGO Hub task and Amplify branch lose
    `COGNITO_*` / `REACT_APP_COGNITO_*` / `REACT_APP_USER_POOL_*`; the NGO Hub IAM user loses its
    `cognito-idp` statement. Apply.
-4. Then O16 in onghub (Cognito code, `cognito_id` column, Amplify leftovers), released like any change.
+4. Then O16 in onghub, branch `feat/o16-remove-cognito` (written and tested locally, 26 November 2026):
+   Cognito runtime and Amplify gone, own login required at boot (`JWT_*`, `AUTH_TOKEN_KEY`, `AWS_REGION`),
+   `hasAccess`/HMAC removed, and a late migration dropping `cognito_id`, `cognito_client_id`,
+   `legacy_cognito_username` and `public_keys` together with `auth:migrate`. Release it only now: before
+   phase 4, `auth:migrate` still needs `cognito_id`. Rebase it on whatever `develop` has by then.
 
 ## 6. Phase 5 — VIC's Cognito and the leftovers
 
