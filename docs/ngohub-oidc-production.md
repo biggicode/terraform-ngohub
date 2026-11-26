@@ -72,7 +72,9 @@ production (no `cognito-idp` calls in CloudTrail for a week) before phase 5.
    ```
    **Rollback point B** (before the emails leave).
 8. Smoke test with the team's own accounts: login with link and with code, an invite, restricting a user,
-   deleting one, `/new`, super-admin pages.
+   deleting one, `/new`, super-admin pages. `npm run auth:super-admin` lists the super admins (they were
+   migrated with everyone; who should stay is question 11); `--add` / `--remove` change them, journaled.
+   Super admin sessions end 12 hours after login (`SUPER_ADMIN_SESSION_HOURS`).
 9. `npm run auth:migrate -- --release`. The queue limiter spaces the emails; watch SES bounces and
    complaints. `--status` until 0.
 
@@ -151,7 +153,7 @@ Only after phase 1's check (VIC calls no Cognito) and the VIC team's go:
 
 | Key | How | Effect |
 | --- | --- | --- |
-| `OIDC_JWKS` (ID token signing) | put the new JWK first, keep the old one; remove the old one after the longest ID token lifetime plus a day | none (clients read the JWKS) |
+| `OIDC_JWKS` (ID token signing) | the set has a signing key and a published standby (`oidc:generate-keys`). `--rotate-oidc`: the standby signs, a new standby is added, the old key stays third; apply. A day later, `--trim-oidc`; apply | none (clients already know the standby) |
 | `OIDC_COOKIE_KEYS` | new key first, old ones after it; drop the old ones after the session lifetime | none |
 | `JWT_PRIVATE_KEY` / `JWT_PUBLIC_KEY` / `JWT_KEY_ID` | new pair and kid, apply | access tokens (15 min) are refused, the SPA refreshes; refresh tokens are not signed, sessions survive |
 | `AUTH_TOKEN_KEY` | new key, old one in `AUTH_TOKEN_KEY_PREVIOUS` (section 1), apply; rotate each OIDC client secret (panel → rotate) to re-seal it, then drop the previous key | emailed links and codes still pending are refused (never in the 30 days after phase 2) |
