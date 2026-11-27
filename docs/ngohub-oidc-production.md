@@ -141,6 +141,12 @@ Only after phase 1's check (VIC calls no Cognito) and the VIC team's go:
    custom domains (`service_ngohub.tf:12`, `service_vic.tf:11`), so they go in the same change.
 3. `ngohub_hmac_api_key` and `ngohub_hmac_secret_key` (passed only to the Cognito modules), and
    `assets/cognito/*`.
+   The Cognito Lambdas' code goes in the same change: `lambda_ngohub.tf` and `lambda/ngohub/` (the
+   auth-challenge, custom-message and `login_pre_authentication_check` functions; their AWS functions were
+   destroyed with the pool in phase 4), the `amplify_login_*` / `login_pre_authentication_check` inputs
+   of `module.ngohub_cognito` (`service_ngohub.tf`, around line 44), then `lambda_vic.tf` and the four
+   `lambda/vic/amplify_login_*` folders with `module.vic_cognito`. **Keep** `lambda/vic/pdf_generator`
+   (`service_vic_pdf_generator.tf`): VIC uses it for contracts.
 4. **Keep** `ngohub_hmac_encryption_key` (`service_ngohub.tf:286`): the NGO Hub API still uses it, and VIC
    gets it too.
 
