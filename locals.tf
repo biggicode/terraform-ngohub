@@ -63,8 +63,8 @@ locals {
       domain = "api-vic${local.env_suffix}.${var.root_domain}"
       image = {
         repo = data.aws_ecr_repository.vic_backend.repository_url
-        # VIC 2.0 (own authentication): staging runs a vic release tag (v2.0.0-rc.N on develop), or an image
-        # of a feature branch pushed by hand (vic_staging_image_tag)
+        # VIC 2.0 (own authentication): staging runs a vic release tag (v2.0.0-rc.N on develop), or the
+        # image CI builds from a feature branch on demand, tagged with the branch name (vic_staging_image_tag)
         tag = local.isProduction ? "1.1.0" : var.vic_staging_image_tag
       }
     }

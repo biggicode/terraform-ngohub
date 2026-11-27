@@ -15,12 +15,13 @@ Code: onghub `feat/ngohub-own-auth` (O0–O15), vic `feat/ngohub-oidc` (VIC 01�
       between the ALB and the task, set `TRUST_PROXY_HOPS`.
 - [ ] The code staging runs, either way:
   - **Before merging (recommended first):** the feature branches pushed to code4romania/onghub and
-    code4romania/vic (Amplify builds only from those repos). Backend images built from them and pushed by
-    hand to ECR, since `build-image.yml` only builds `main`, `develop` and `v*` tags:
-    ```sh
-    # onghub/backend at feat/ngohub-own-auth (same for vic/backend at feat/ngohub-oidc)
-    docker build --platform linux/amd64 -t <ecr repo>:<tag> . && docker push <ecr repo>:<tag>
-    ```
+    code4romania/vic (Amplify builds only from those repos). Backend images from CI: `build-image.yml`
+    builds `main`, `develop` and `v*` on push, and any branch on demand (`workflow_dispatch`: Actions →
+    "Build Docker image" → Run workflow → the branch). The image is tagged with the branch name, `/`
+    replaced by `-` (`type=ref,event=branch` in code4romania/.github `build-push-image-ecr.yml`):
+    `onghub:feat-ngohub-own-auth`, `vic:feat-ngohub-oidc`. Rerun it after new commits; the tag moves,
+    so force a new deployment (or apply) to pick it up. A hand build is only the fallback:
+    `docker build --platform linux/amd64 -t <ecr repo>:<tag> backend && docker push <ecr repo>:<tag>`.
     Then plan every step below with `-var ngohub_staging_image_tag=<ngohub_tag>`,
     `-var vic_staging_image_tag=<vic_tag>`, `-var ngohub_staging_frontend_branch=feat/ngohub-own-auth`,
     `-var vic_staging_frontend_branch=feat/ngohub-oidc`. Changing a frontend branch **replaces** the
